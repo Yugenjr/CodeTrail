@@ -140,6 +140,51 @@ class GitHubClient:
         except Exception:
             return None
 
+    def get_commit_count(self, owner: str, repo: str) -> int | None:
+        """Estimate commit count using the commits endpoint and Link header."""
+        try:
+            response = self.session.get(
+                f"https://api.github.com/repos/{owner}/{repo}/commits",
+                params={"per_page": 1},
+                timeout=15,
+            )
+            if response.status_code != 200:
+                return None
+
+            link = response.headers.get("Link")
+            if not link:
+                # no pagination header, count is the number of items in response (0 or 1)
+                payload = response.json()
+                if isinstance(payload, list):
+                    return len(payload)
+                return None
+
+            # parse rel="last" page number
+            # Link header format: <...&page=NN&per_page=1>; rel="last", <...>; rel="next"
+            parts = [p.strip() for p in link.split(",")]
+            for part in parts:
+                if 'rel="last"' in part:
+                    # extract page param
+                    start = part.find("<")
+                    end = part.find(">", start)
+                    if start == -1 or end == -1:
+                        continue
+                    url = part[start + 1 : end]
+                    # find page= number
+                    import urllib.parse as _up
+
+                    qs = _up.urlparse(url).query
+                    params = _up.parse_qs(qs)
+                    page_vals = params.get("page")
+                    if page_vals:
+                        try:
+                            return int(page_vals[-1])
+                        except Exception:
+                            return None
+            return None
+        except Exception:
+            return None
+
     def get_repository_file_text(self, owner: str, repo: str, path: str) -> str | None:
         response = self.session.get(
             f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",

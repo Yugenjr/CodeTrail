@@ -46,6 +46,13 @@ def register(app: Typer) -> None:
         table.add_row("Forks", str(meta.get("forks_count", 0)))
         table.add_row("Primary Language", str(meta.get("language") or "-"))
         table.add_row("Open Issues", str(meta.get("open_issues_count", 0)))
+        # commit count (may be estimated via Link header)
+        commit_count = None
+        try:
+            commit_count = client.get_commit_count(owner, name)
+        except Exception:
+            commit_count = None
+        table.add_row("Commits", str(commit_count) if isinstance(commit_count, int) else "-")
 
         console.print(table)
 
