@@ -113,6 +113,33 @@ class GitHubClient:
                     paths.append(path)
         return paths
 
+    def get_repository_info(self, owner: str, repo: str) -> dict[str, Any]:
+        response = self.session.get(f"https://api.github.com/repos/{owner}/{repo}", timeout=15)
+        if response.status_code != 200:
+            return {}
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
+
+    def get_issues(self, owner: str, repo: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        params = params or {"per_page": 30, "state": "open"}
+        try:
+            response = self.session.get(f"https://api.github.com/repos/{owner}/{repo}/issues", params=params, timeout=15)
+            response.raise_for_status()
+            payload = response.json()
+            return [item for item in payload if isinstance(item, dict) and "pull_request" not in item]
+        except Exception:
+            return []
+
+    def get_issue(self, owner: str, repo: str, number: int) -> dict[str, Any] | None:
+        try:
+            response = self.session.get(f"https://api.github.com/repos/{owner}/{repo}/issues/{number}", timeout=15)
+            if response.status_code != 200:
+                return None
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None
+        except Exception:
+            return None
+
     def get_repository_file_text(self, owner: str, repo: str, path: str) -> str | None:
         response = self.session.get(
             f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
