@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from utils.config import ConfigManager
 from utils.github_client import GitHubClient
 
 
 SKILL_CACHE_TTL = timedelta(hours=24)
+SKILL_ANALYSIS_VERSION = 2
 
 
 @dataclass(slots=True)
@@ -33,6 +34,7 @@ class SkillNode:
 
 @dataclass(slots=True)
 class SkillAnalysisResult:
+    analysis_version: int
     username: str
     display_name: str | None
     repository_count: int
@@ -44,6 +46,7 @@ class SkillAnalysisResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "analysis_version": self.analysis_version,
             "username": self.username,
             "display_name": self.display_name,
             "repository_count": self.repository_count,
@@ -100,6 +103,7 @@ class SkillAnalysisResult:
         ]
 
         return cls(
+            analysis_version=int(payload.get("analysis_version", 1)),
             username=str(payload.get("username", "")),
             display_name=payload.get("display_name"),
             repository_count=int(payload.get("repository_count", 0)),
@@ -113,6 +117,8 @@ class SkillAnalysisResult:
 
 class SkillAnalysisService:
     """Analyze user repositories into a local skill graph."""
+
+    max_manifest_fetches_per_repo = 3
 
     framework_rules = {
         "FastAPI": ("fastapi", "fastapi"),
@@ -148,15 +154,21 @@ class SkillAnalysisService:
         self.client = client
         self.config = config or ConfigManager()
 
-    def analyze(self, refresh: bool = False) -> SkillAnalysisResult:
+    def analyze(
+        self,
+        refresh: bool = False,
+        progress: Callable[[int, int, str], None] | None = None,
+    ) -> SkillAnalysisResult:
         cached = self.config.get_skill_analysis_cache()
         if not refresh and cached:
+            cached_version = int(cached.get("analysis_version", 1))
             cached_timestamp = str(cached.get("generated_at", ""))
-            if self._is_cache_fresh(cached_timestamp):
+            if cached_version == SKILL_ANALYSIS_VERSION and self._is_cache_fresh(cached_timestamp):
                 return SkillAnalysisResult.from_dict(cached)
 
         user = self.client.get_user()
         repositories = self.client.get_user_repositories()
+        total_repositories = len(repositories)
 
         analyzed_repositories: list[RepositorySkillSnapshot] = []
         language_totals: Counter[str] = Counter()
@@ -164,13 +176,16 @@ class SkillAnalysisService:
         framework_sources: dict[str, set[str]] = defaultdict(set)
         language_sources: dict[str, set[str]] = defaultdict(set)
 
-        for repository in repositories:
+        for index, repository in enumerate(repositories, start=1):
             owner = self._string_value(repository.get("owner", {}), "login") or str(user.get("login", ""))
             name = str(repository.get("name", ""))
             full_name = str(repository.get("full_name", f"{owner}/{name}"))
             html_url = str(repository.get("html_url", ""))
             fork = bool(repository.get("fork", False))
             weight = 0.5 if fork else 1.0
+
+            if progress:
+                progress(index, total_repositories, full_name)
 
             repo_languages = self._fetch_repository_languages(owner, name, repository)
             for language, bytes_used in repo_languages.items():
@@ -205,6 +220,7 @@ class SkillAnalysisService:
         )
 
         analysis = SkillAnalysisResult(
+            analysis_version=SKILL_ANALYSIS_VERSION,
             username=str(user.get("login", "")),
             display_name=user.get("name"),
             repository_count=len(analyzed_repositories),
@@ -246,7 +262,9 @@ class SkillAnalysisService:
 
     def _fetch_repository_manifests(self, owner: str, name: str, tree: list[str]) -> dict[str, str]:
         content: dict[str, str] = {}
-        for path in tree:
+        selected_paths = self._select_manifest_paths(tree)
+
+        for path in selected_paths:
             filename = path.rsplit("/", 1)[-1]
             if filename not in self.manifest_files:
                 continue
@@ -254,8 +272,27 @@ class SkillAnalysisService:
             text = self.client.get_repository_file_text(owner, name, path)
             if text:
                 content[path] = text[:50000]
+                if len(content) >= self.max_manifest_fetches_per_repo:
+                    break
 
         return content
+
+    def _select_manifest_paths(self, tree: list[str]) -> list[str]:
+        manifest_paths = [path for path in tree if path.rsplit("/", 1)[-1] in self.manifest_files]
+        if not manifest_paths:
+            return []
+
+        root_paths = [path for path in manifest_paths if "/" not in path]
+        shallow_paths = [path for path in manifest_paths if path.count("/") <= 1 and path not in root_paths]
+
+        selected: list[str] = []
+        for path in root_paths + shallow_paths + manifest_paths:
+            if path not in selected:
+                selected.append(path)
+            if len(selected) >= self.max_manifest_fetches_per_repo:
+                break
+
+        return selected
 
     def _detect_frameworks(self, tree: list[str], manifests: dict[str, str]) -> list[str]:
         detected: list[str] = []
@@ -299,9 +336,9 @@ class SkillAnalysisService:
         nodes: list[SkillNode] = []
 
         for language, bytes_used in language_totals.most_common():
-            share = bytes_used / total_language_bytes
+            # Score languages by repository coverage only (percent of repos using the language)
             evidence = len(language_sources.get(language, set()))
-            score = min(100, round((share * 70) + ((evidence / max(repository_count, 1)) * 30)))
+            score = round((evidence / max(repository_count, 1)) * 100)
             nodes.append(
                 SkillNode(
                     name=language,
@@ -314,7 +351,7 @@ class SkillAnalysisService:
 
         for framework, count in framework_counts.most_common():
             evidence = len(framework_sources.get(framework, set()))
-            score = min(100, (count * 20) + (evidence * 10))
+            score = round((evidence / max(repository_count, 1)) * 100)
             nodes.append(
                 SkillNode(
                     name=framework,

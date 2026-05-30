@@ -40,16 +40,20 @@ def register(app: Typer) -> None:
         if not skills:
             return
 
-        analysis = SkillAnalysisService(client=client).analyze()
+        with console.status("[bold cyan]Analyzing repositories...[/bold cyan]", spinner="dots") as status:
+            def update_progress(current: int, total: int, repository_name: str) -> None:
+                status.update(f"[bold cyan]Analyzing {current}/{total}[/bold cyan] {repository_name}")
+
+            analysis = SkillAnalysisService(client=client).analyze(progress=update_progress)
+
         console.print()
         console.print(f"[bold]Skill graph for {analysis.username}[/bold]")
 
         language_table = Table(title="Languages", show_lines=False)
         language_table.add_column("Language", style="cyan")
-        language_table.add_column("Bytes", justify="right")
         language_table.add_column("Score", justify="right")
         for node in [item for item in analysis.nodes if item.category == "language"]:
-            language_table.add_row(node.name, str(analysis.language_totals.get(node.name, 0)), f"{node.score}%")
+            language_table.add_row(node.name, f"{node.score}%")
 
         framework_table = Table(title="Frameworks", show_lines=False)
         framework_table.add_column("Framework", style="cyan")
