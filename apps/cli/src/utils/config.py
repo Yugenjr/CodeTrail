@@ -53,3 +53,25 @@ class ConfigManager:
 
         if self.config_path.exists():
             self.config_path.unlink()
+
+    def get_skill_analysis_cache(self) -> dict[str, Any] | None:
+        config = self.load_config()
+        cache = config.get("skill_analysis_cache")
+        return cache if isinstance(cache, dict) else None
+
+    def set_skill_analysis_cache(self, cache: dict[str, Any]) -> None:
+        config = self.load_config()
+        config["skill_analysis_cache"] = cache
+        self.save_config(config)
+
+    def clear_skill_analysis_cache(self) -> None:
+        config = self.load_config()
+        if "skill_analysis_cache" in config:
+            del config["skill_analysis_cache"]
+
+        if config:
+            self.save_config(config)
+            return
+
+        if self.config_path.exists():
+            self.config_path.unlink()

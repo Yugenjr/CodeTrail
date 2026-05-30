@@ -7,7 +7,12 @@ apps/cli/src/codetrail.egg-info/entry_points.txt
 apps/cli/src/codetrail.egg-info/requires.txt
 apps/cli/src/codetrail.egg-info/top_level.txt
 apps/cli/src/main.py
+apps/cli/src/codetrail.egg-info/PKG-INFO
 apps/cli/src/codetrail.egg-info/SOURCES.txt
+apps/cli/src/codetrail.egg-info/dependency_links.txt
+apps/cli/src/codetrail.egg-info/entry_points.txt
+apps/cli/src/codetrail.egg-info/requires.txt
+apps/cli/src/codetrail.egg-info/top_level.txt
 apps/cli/src/commands/__init__.py
 apps/cli/src/commands/analyze.py
 apps/cli/src/commands/base.py
@@ -29,4 +34,5 @@ apps/cli/src/utils/api_client.py
 apps/cli/src/utils/config.py
 apps/cli/src/utils/github_client.py
 apps/cli/src/utils/logger.py
+apps/cli/src/utils/skill_analysis.py
 apps/cli/src/utils/storage.py

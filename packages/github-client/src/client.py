@@ -26,6 +26,119 @@ class GitHubClient:
         payload = response.json()
         return payload if isinstance(payload, dict) else {}
 
+    def get_user_repositories(self) -> list[dict[str, Any]]:
+        repositories: list[dict[str, Any]] = []
+        page = 1
+
+        while True:
+            response = self.session.get(
+                "https://api.github.com/user/repos",
+                params={
+                    "per_page": 100,
+                    "page": page,
+                    "sort": "updated",
+                    "direction": "desc",
+                    "visibility": "all",
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, list) or not payload:
+                break
+
+            repositories.extend(item for item in payload if isinstance(item, dict))
+            if len(payload) < 100:
+                break
+            page += 1
+
+        return repositories
+
+    def get_repository_languages(self, owner: str, repo: str) -> dict[str, int]:
+        response = self.session.get(
+            f"https://api.github.com/repos/{owner}/{repo}/languages",
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            return {}
+
+        result: dict[str, int] = {}
+        for language, bytes_used in payload.items():
+            if isinstance(language, str) and isinstance(bytes_used, int):
+                result[language] = bytes_used
+        return result
+
+    def get_repository_tree(self, owner: str, repo: str, ref: str | None = None) -> list[str]:
+        tree_sha = ref
+        if ref:
+            branch_response = self.session.get(
+                f"https://api.github.com/repos/{owner}/{repo}/branches/{ref}",
+                timeout=15,
+            )
+            if branch_response.status_code == 200:
+                branch_payload = branch_response.json()
+                if isinstance(branch_payload, dict):
+                    commit = branch_payload.get("commit")
+                    if isinstance(commit, dict):
+                        commit_payload = commit.get("commit")
+                        if isinstance(commit_payload, dict):
+                            tree_payload = commit_payload.get("tree")
+                            if isinstance(tree_payload, dict):
+                                tree_sha = tree_payload.get("sha")
+
+        if not isinstance(tree_sha, str) or not tree_sha:
+            return []
+
+        response = self.session.get(
+            f"https://api.github.com/repos/{owner}/{repo}/git/trees/{tree_sha}",
+            params={"recursive": 1},
+            timeout=15,
+        )
+        if response.status_code == 404:
+            return []
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            return []
+
+        tree = payload.get("tree", [])
+        if not isinstance(tree, list):
+            return []
+
+        paths: list[str] = []
+        for entry in tree:
+            if isinstance(entry, dict):
+                path = entry.get("path")
+                if isinstance(path, str):
+                    paths.append(path)
+        return paths
+
+    def get_repository_file_text(self, owner: str, repo: str, path: str) -> str | None:
+        response = self.session.get(
+            f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+            timeout=15,
+        )
+        if response.status_code != 200:
+            return None
+
+        payload = response.json()
+        if not isinstance(payload, dict):
+            return None
+
+        content = payload.get("content")
+        encoding = payload.get("encoding")
+        if not isinstance(content, str) or encoding != "base64":
+            return None
+
+        import base64
+
+        try:
+            return base64.b64decode(content).decode("utf-8", errors="ignore")
+        except (ValueError, UnicodeDecodeError):
+            return None
+
     def validate_token(self) -> bool:
         try:
             response = self.session.get("https://api.github.com/user", timeout=15)
