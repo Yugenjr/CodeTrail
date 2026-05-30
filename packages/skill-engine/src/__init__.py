@@ -1,0 +1,1 @@
+"""CodeTrail skill engine scaffolding."""

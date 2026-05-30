@@ -1,0 +1,1 @@
+"""CodeTrail GitHub client scaffolding."""

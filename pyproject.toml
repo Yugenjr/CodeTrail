@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codetrail"
+version = "0.1.0"
+description = "CodeTrail repository skeleton"
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "Proprietary"}
+
+authors = [{name = "CodeTrail"}]
+keywords = ["github", "cli", "developer-tools", "ai"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: Other/Proprietary License",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

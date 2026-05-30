@@ -1,0 +1,1 @@
+"""Skill engine models scaffolding."""

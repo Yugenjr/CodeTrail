@@ -1,0 +1,1 @@
+"""CodeTrail CLI package scaffolding."""

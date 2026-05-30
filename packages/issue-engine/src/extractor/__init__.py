@@ -1,0 +1,1 @@
+"""Issue extractor scaffolding."""

@@ -1,0 +1,1 @@
+Reserved for future architecture. Not required for CLI MVP.

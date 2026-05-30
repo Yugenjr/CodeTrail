@@ -1,0 +1,1 @@
+"""CodeTrail shared scaffolding."""

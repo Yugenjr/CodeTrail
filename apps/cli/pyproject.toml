@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codetrail-cli"
+version = "0.1.0"
+description = "CodeTrail CLI"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = ["typer>=0.12", "rich>=13"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
