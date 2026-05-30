@@ -1,0 +1,2 @@
+[console_scripts]
+codetrail = main:app
