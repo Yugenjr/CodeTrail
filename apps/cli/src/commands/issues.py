@@ -1,4 +1,4 @@
-from typer import Typer, Argument
+from typer import Typer, Argument, Option
 from rich.console import Console
 from rich.table import Table
 
@@ -11,7 +11,12 @@ def register(app: Typer) -> None:
     issues_app = Typer()
 
     @issues_app.command(name="list")
-    def list_issues(repo: str | None = Argument(None, help="owner/repo to inspect (optional)"), repo_opt: str | None = None) -> None:
+    def list_issues(
+        repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
+        limit: int = 30,
+        page: int = 1,
+    ) -> None:
         """List open issues for the current or specified repository."""
         console = Console()
         try:
@@ -24,20 +29,20 @@ def register(app: Typer) -> None:
         token = ConfigManager().get_github_token()
         client = GitHubClient(token=token) if token else GitHubClient(token="")
         explorer = IssueExplorer(client=client)
-        issues = explorer.list(owner, name)
+        issues = explorer.list_paginated(owner, name, limit=limit, page=page)
 
         console.print("[bold]Open Issues[/bold]\n")
         if not issues:
             console.print("No open issues found.")
             return
-        for issue in issues[:50]:
+        for issue in issues[:limit]:
             console.print(f"#{issue.get('number')}  {issue.get('title')}")
 
     @issues_app.command(name="show")
     def show(
         arg1: str | None = Argument(None, help="Issue number or owner/repo"),
         arg2: str | None = Argument(None, help="Issue number or owner/repo"),
-        repo_opt: str | None = None,
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
     ) -> None:
         """Show details for a single issue.
 
@@ -120,7 +125,9 @@ def register(app: Typer) -> None:
     def search(
         arg1: str | None = Argument(None, help="Query or owner/repo"),
         arg2: str | None = Argument(None, help="Query or owner/repo"),
-        repo_opt: str | None = None,
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
+        limit: int = 30,
+        page: int = 1,
     ) -> None:
         """Search open issues for a query. Usage examples:
 
@@ -164,16 +171,25 @@ def register(app: Typer) -> None:
         client = GitHubClient(token=token) if token else GitHubClient(token="")
         explorer = IssueExplorer(client=client)
         results = explorer.search(owner, name, query)
+        # apply pagination client side if needed
+        start = (max(1, page) - 1) * limit
+        results = results[start : start + limit]
 
         console.print("[bold]Matching Issues[/bold]\n")
         if not results:
             console.print("No matching issues found.")
             return
-        for issue in results[:50]:
-            console.print(f"#{issue.get('number')}")
+        for issue in results:
+            console.print(f"#{issue.get('number')}  {issue.get('title')}")
 
     @issues_app.command(name="filter")
-    def filter_label(label: str, repo: str | None = Argument(None, help="owner/repo to inspect (optional)"), repo_opt: str | None = None) -> None:
+    def filter_label(
+        label: str,
+        repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
+        limit: int = 30,
+        page: int = 1,
+    ) -> None:
         """List open issues that have the given label (e.g. `good-first-issue`)."""
         console = Console()
         try:
@@ -186,13 +202,15 @@ def register(app: Typer) -> None:
         token = ConfigManager().get_github_token()
         client = GitHubClient(token=token) if token else GitHubClient(token="")
         explorer = IssueExplorer(client=client)
-        issues = explorer.filter_by_label(owner, name, label)
+        issues = explorer.list_paginated(owner, name, state="open", limit=limit, page=page)
+        # filter by label client-side as a fallback
+        issues = [i for i in issues if label in ",".join([l.get("name", "") for l in i.get("labels", [])])]
 
         console.print(f"[bold]Issues with label '{label}'[/bold]\n")
         if not issues:
             console.print("No issues found with that label.")
             return
-        for issue in issues[:50]:
+        for issue in issues:
             console.print(f"#{issue.get('number')}  {issue.get('title')}")
 
     app.add_typer(issues_app, name="issues")

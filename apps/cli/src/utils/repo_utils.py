@@ -129,6 +129,10 @@ class IssueExplorer:
         params = {"state": state, "per_page": min(limit, 100)}
         return self.client.get_issues(owner, repo, params=params)
 
+    def list_paginated(self, owner: str, repo: str, state: str = "open", limit: int = 30, page: int = 1) -> list[dict[str, Any]]:
+        params = {"state": state, "per_page": min(limit, 100), "page": max(1, int(page))}
+        return self.client.get_issues(owner, repo, params=params)
+
     def show(self, owner: str, repo: str, number: int) -> dict[str, Any] | None:
         return self.client.get_issue(owner, repo, number)
 

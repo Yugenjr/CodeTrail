@@ -1,4 +1,4 @@
-from typer import Typer, Argument
+from typer import Typer, Argument, Option
 from rich.console import Console
 from rich.table import Table
 
@@ -13,7 +13,7 @@ def register(app: Typer) -> None:
     @repo_app.command(name="info")
     def info(
         repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
-        repo_opt: str | None = None,
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
     ) -> None:
         """Show basic repository metadata for the current or an explicit repository.
 
@@ -59,7 +59,7 @@ def register(app: Typer) -> None:
     @repo_app.command(name="stack")
     def stack(
         repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
-        repo_opt: str | None = None,
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
     ) -> None:
         """Detect high-level languages and frameworks for a repository.
 
@@ -95,7 +95,7 @@ def register(app: Typer) -> None:
     @repo_app.command(name="structure")
     def structure(
         repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
-        repo_opt: str | None = None,
+        repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
     ) -> None:
         """Show important top-level directories and files for a repository.
 
