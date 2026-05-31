@@ -60,6 +60,7 @@ def register(app: Typer) -> None:
     def stack(
         repo: str | None = Argument(None, help="owner/repo to inspect (optional)"),
         repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
+        debug: bool = Option(False, "--debug", help="Show detailed framework evidence and sources"),
     ) -> None:
         """Detect high-level languages and frameworks for a repository.
 
@@ -79,33 +80,64 @@ def register(app: Typer) -> None:
         stack = analyzer.stack(owner, name)
 
         console.print("[bold]Repository Stack[/bold]\n")
+        identity = stack.get("identity", {}) or {}
+        console.print("[bold]Repository Identity[/bold]")
+        console.print(f"Primary Framework: {identity.get('primary_framework') or 'Unknown'}")
+        if identity.get("primary_technology"):
+            console.print(f"Primary Technology: {identity.get('primary_technology')}")
+        console.print(f"Repository Type: {identity.get('repository_type') or '-'}\n")
+
         lang_table = Table(title="Languages")
         lang_table.add_column("Language", style="cyan")
+        lang_table.add_column("Percent", justify="right")
         for lang in stack.get("languages", []):
-            lang_table.add_row(lang)
+            if isinstance(lang, dict):
+                lang_table.add_row(str(lang.get("name", "-")), f"{lang.get('percentage', 0):.1f}%")
+            else:
+                lang_table.add_row(str(lang), "-")
 
         console.print(lang_table)
 
-        fw_table = Table(title="Frameworks and Confidence")
-        fw_table.add_column("Framework", style="cyan")
-        fw_table.add_column("Evidence", justify="right")
-        fw_table.add_column("Score", justify="right")
-        for fw in stack.get("frameworks", []):
-            name = fw.get("name") if isinstance(fw, dict) else str(fw)
-            evidence = str(fw.get("evidence", "-")) if isinstance(fw, dict) else "-"
-            score = str(fw.get("score", "-")) if isinstance(fw, dict) else "-"
-            fw_table.add_row(name, evidence, score)
+        def render_scored_table(title: str, items: list[dict]) -> None:
+            if not items:
+                return
+            table = Table(title=title)
+            table.add_column("Name", style="cyan")
+            table.add_column("Evidence", justify="right")
+            table.add_column("Score", justify="right")
+            for item in items:
+                if isinstance(item, dict):
+                    name = str(item.get("name", "-"))
+                    score = str(item.get("score", "-"))
+                    srcs = item.get("sources", {}) or {}
+                    tier1 = item.get("tier1_count", 0) or 0
+                    total_sources = sum(v for v in srcs.values()) if isinstance(srcs, dict) else 0
+                    evidence_display = f"{tier1} deps" if tier1 > 0 else str(total_sources or "-")
+                else:
+                    name = str(item)
+                    evidence_display = "-"
+                    score = "-"
+                table.add_row(name, evidence_display, score)
+            console.print(table)
 
-        console.print(fw_table)
+        render_scored_table("Frameworks", stack.get("frameworks", []))
+        render_scored_table("Testing", stack.get("testing", []))
+        render_scored_table("Developer Tools", stack.get("developer_tools", []))
+        render_scored_table("Build Tools", stack.get("build_tools", []))
 
-        testing = stack.get("testing", [])
-        if testing:
-            test_table = Table(title="Testing")
-            test_table.add_column("Tool", style="cyan")
-            test_table.add_column("Evidence", justify="right")
-            for t in testing:
-                test_table.add_row(t.get("name", "-"), str(t.get("evidence", "-")))
-            console.print(test_table)
+        if debug:
+            console.print("\n[bold]Framework Evidence Details[/bold]")
+            for fw in stack.get("frameworks", []):
+                if not isinstance(fw, dict):
+                    continue
+                console.print(f"\n[underline]{fw.get('name')}[/underline]")
+                console.print(f"Score: {fw.get('score')}    Weighted: {fw.get('weighted')}")
+                console.print("Evidence Sources:")
+                srcs = fw.get("sources", {}) or {}
+                for sname, cnt in srcs.items():
+                    console.print(f"- {sname}: {cnt}")
+
+        # Category tables above already include testing/developer/build tool details.
 
     @repo_app.command(name="structure")
     def structure(

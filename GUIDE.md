@@ -39,7 +39,19 @@ Usage: `codetrail repo <subcommand> [owner/repo] [--repo owner/repo]`
 
 - `info [owner/repo]` — Show repository metadata: full name, description, stars, forks, primary language, open issues, and commits (commit count may be estimated).
 	- If `owner/repo` is omitted the command attempts to detect the current repository via `.git/config` or `git remote`.
-- `stack [owner/repo]` — Fast tech stack detection using root-level manifests (e.g., `package.json`, `pyproject.toml`, `requirements.txt`). Shows top languages and detected frameworks.
+- `stack [owner/repo]` — Repository intelligence view with identity, language percentages, and framework confidence.
+	- Displays a `Repository Identity` section (`Primary Framework`, `Repository Type`) inferred from repository name, description, topics, and detected framework signals.
+	- If identity signals are weak, `Primary Framework` is shown as `Unknown` (no invented framework), and `Primary Technology` is shown from language composition.
+	- Uses GitHub language statistics (`/languages`) to render language composition percentages.
+	- Framework scoring prioritizes dependency declarations over docs mentions, and identity signals boost the repository's primary framework.
+	- Framework detection inspects remote manifest files and reports evidence counts and a confidence score (0-100). A `Testing` section lists detected test frameworks.
+	- Technologies are classified into separate sections:
+	  - `Frameworks` (user-facing application frameworks)
+	  - `Testing` (e.g., `pytest`, `Jest`, `Vitest`, `Playwright`)
+	  - `Developer Tools` (e.g., `ruff`, `black`, `mypy`)
+	  - `Build Tools` (e.g., `poetry`, `setuptools`)
+	- Use `--debug` to print detailed evidence sources for each detected framework (which files and counts contributed).
+	- Detection uses exact dependency matching and import/module patterns (not naive substring matching). Files under `docs/`, `examples/`, `fixtures/`, `benchmarks/` are excluded from high-confidence code scanning.
 - `structure [owner/repo]` — List likely important top-level directories and common manifest files (e.g., `src`, `test`, `README.md`, `package.json`).
 
 Issues exploration (`issues`)
