@@ -90,18 +90,119 @@ class RepositoryAnalyzer:
         languages = self.client.get_repository_languages(owner, repo) or {}
         lang_list = sorted(languages.keys(), key=lambda k: languages.get(k, 0), reverse=True)
 
-        # detect frameworks from root-level manifests
-        tree = self.client.get_repository_tree(owner, repo)
-        root_files = [p for p in tree if "/" not in p]
-        frameworks: set[str] = set()
-        for fname in root_files:
+        # manifest files to inspect via GitHub Contents API
+        manifests = [
+            "package.json",
+            "requirements.txt",
+            "pyproject.toml",
+            "Cargo.toml",
+            "pom.xml",
+            "build.gradle",
+            "composer.json",
+            "go.mod",
+            "Gemfile",
+            "pubspec.yaml",
+        ]
+
+        # mapping of keywords to framework display names
+        keyword_map = {
+            # JS/TS
+            "react": "React",
+            "next": "Next.js",
+            "nuxt": "Nuxt",
+            "vue": "Vue",
+            "angular": "Angular",
+            "express": "Express",
+            "nestjs": "NestJS",
+            "electron": "Electron",
+            "playwright": "Playwright",
+            "jest": "Jest",
+            "vitest": "Vitest",
+            # Python
+            "fastapi": "FastAPI",
+            "django": "Django",
+            "flask": "Flask",
+            "pytest": "pytest",
+            "sqlalchemy": "SQLAlchemy",
+            "pydantic": "Pydantic",
+            "celery": "Celery",
+            "streamlit": "Streamlit",
+            # Java
+            "spring": "Spring",
+            "spring-boot": "Spring Boot",
+            "quarkus": "Quarkus",
+            # Rust
+            "actix": "Actix",
+            "rocket": "Rocket",
+            "tokio": "Tokio",
+            # Go
+            "gin": "Gin",
+            "fiber": "Fiber",
+            "echo": "Echo",
+            # Dart/Flutter
+            "flutter": "Flutter",
+        }
+
+        evidence_counts: dict[str, int] = {}
+        testing_evidence: dict[str, int] = {}
+
+        for fname in manifests:
+            text = self.client.get_repository_file_text(owner, repo, fname)
+            if not text:
+                continue
+            blob = text.lower()
+
+            # package.json: prefer parsing dependencies keys
             if fname == "package.json":
-                text = self.client.get_repository_file_text(owner, repo, fname) or ""
-                blob = text.lower()
-                for fw in ("react", "next", "vue", "express", "electron", "jest", "playwright"):
-                    if fw in blob:
-                        frameworks.add(fw.capitalize())
-        return {"languages": lang_list[:8], "frameworks": sorted(frameworks)}
+                try:
+                    import json
+
+                    parsed = json.loads(text)
+                    deps = {}
+                    for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+                        section = parsed.get(key) or {}
+                        if isinstance(section, dict):
+                            deps.update({k.lower(): v for k, v in section.items() if isinstance(k, str)})
+
+                    # search dependency keys for known frameworks
+                    for k in deps.keys():
+                        for kw, display in keyword_map.items():
+                            if kw in k:
+                                evidence_counts[display] = evidence_counts.get(display, 0) + 1
+                                # testing frameworks in dev deps
+                                if kw in ("jest", "vitest", "playwright", "pytest"):
+                                    testing_evidence[display] = testing_evidence.get(display, 0) + 1
+                except Exception:
+                    pass
+
+            # generic substring search across manifest
+            for kw, display in keyword_map.items():
+                if kw in blob:
+                    evidence_counts[display] = evidence_counts.get(display, 0) + blob.count(kw)
+                    if kw in ("jest", "vitest", "playwright", "pytest"):
+                        testing_evidence[display] = testing_evidence.get(display, 0) + blob.count(kw)
+
+        # additional inference: if repo languages include JavaScript/TypeScript, add Node.js evidence
+        if any(l.lower() in ("javascript", "typescript") for l in lang_list):
+            evidence_counts["Node.js"] = evidence_counts.get("Node.js", 0) + 1
+
+        # Build framework list with scores
+        frameworks_list: list[dict[str, int]] = []
+        max_evidence = max(evidence_counts.values()) if evidence_counts else 0
+        for name, cnt in sorted(evidence_counts.items(), key=lambda kv: kv[1], reverse=True):
+            # simple confidence scaling: base 40 + proportional to evidence, capped at 95
+            score = 40
+            if max_evidence > 0:
+                score += int((cnt / max_evidence) * 55)
+            score = min(95, score)
+            frameworks_list.append({"name": name, "evidence": cnt, "score": score})
+
+        testing_list = []
+        if testing_evidence:
+            for name, cnt in sorted(testing_evidence.items(), key=lambda kv: kv[1], reverse=True):
+                testing_list.append({"name": name, "evidence": cnt})
+
+        return {"languages": lang_list[:8], "frameworks": frameworks_list, "testing": testing_list}
 
     def structure(self, owner: str, repo: str) -> dict[str, list[str]]:
         tree = self.client.get_repository_tree(owner, repo)

@@ -84,13 +84,28 @@ def register(app: Typer) -> None:
         for lang in stack.get("languages", []):
             lang_table.add_row(lang)
 
-        fw_table = Table(title="Frameworks")
-        fw_table.add_column("Framework", style="cyan")
-        for fw in stack.get("frameworks", []):
-            fw_table.add_row(fw)
-
         console.print(lang_table)
+
+        fw_table = Table(title="Frameworks and Confidence")
+        fw_table.add_column("Framework", style="cyan")
+        fw_table.add_column("Evidence", justify="right")
+        fw_table.add_column("Score", justify="right")
+        for fw in stack.get("frameworks", []):
+            name = fw.get("name") if isinstance(fw, dict) else str(fw)
+            evidence = str(fw.get("evidence", "-")) if isinstance(fw, dict) else "-"
+            score = str(fw.get("score", "-")) if isinstance(fw, dict) else "-"
+            fw_table.add_row(name, evidence, score)
+
         console.print(fw_table)
+
+        testing = stack.get("testing", [])
+        if testing:
+            test_table = Table(title="Testing")
+            test_table.add_column("Tool", style="cyan")
+            test_table.add_column("Evidence", justify="right")
+            for t in testing:
+                test_table.add_row(t.get("name", "-"), str(t.get("evidence", "-")))
+            console.print(test_table)
 
     @repo_app.command(name="structure")
     def structure(

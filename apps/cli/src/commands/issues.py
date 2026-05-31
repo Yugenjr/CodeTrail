@@ -43,6 +43,7 @@ def register(app: Typer) -> None:
         arg1: str | None = Argument(None, help="Issue number or owner/repo"),
         arg2: str | None = Argument(None, help="Issue number or owner/repo"),
         repo_opt: str | None = Option(None, "--repo", "-r", help="owner/repo to inspect (optional)"),
+        full: bool = Option(False, "--full", help="Show full issue body instead of truncated summary"),
     ) -> None:
         """Show details for a single issue.
 
@@ -116,8 +117,18 @@ def register(app: Typer) -> None:
         table.add_row("Author", issue.get("user", {}).get("login", "-"))
         labels = ", ".join([l.get("name", "") for l in issue.get("labels", [])])
         table.add_row("Labels", labels or "-")
-        table.add_row("State", issue.get("state", "-"))
-        table.add_row("Body", issue.get("body", "-")[:1000])
+
+        if full:
+            table.add_row("State", issue.get("state", "-"))
+            table.add_row("Created", issue.get("created_at", "-"))
+            table.add_row("Updated", issue.get("updated_at", "-"))
+            body = issue.get("body", "-") or "-"
+            table.add_row("Body", body)
+        else:
+            table.add_row("State", issue.get("state", "-"))
+            body = issue.get("body", "") or ""
+            summary = (body[:1000] + "...") if len(body) > 1000 else body
+            table.add_row("Summary", summary or "-")
 
         console.print(table)
 

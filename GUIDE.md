@@ -93,15 +93,13 @@ codetrail issues search bug --repo microsoft/vscode
 codetrail issues show 123 --repo microsoft/vscode
 codetrail issues filter good-first-issue --repo microsoft/vscode
 ```
-
 Development & testing
 
 - Unit tests live in `tests/` (run with `pytest -q`).
 - CI: `.github/workflows/ci.yml` runs tests on push and pull requests.
+	- `--full` on `issues show` prints full issue body and timestamps; without it the output shows a truncated summary (first ~1000 chars).
 
-Troubleshooting
-
-- If you see authentication errors, run `codetrail login` again to refresh the token.
+	- Framework detection inspects remote manifest files and reports evidence counts and a confidence score (0-100). A `Testing` section lists detected test frameworks.
 - If repository detection fails, pass the repository explicitly with `--repo owner/repo`.
 - Long-running analysis: `profile --skills` can take time for many repositories; the CLI shows progress updates. You can skip deep analysis by omitting `--skills`.
 
